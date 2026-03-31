@@ -4,6 +4,10 @@ from typing import List, Dict
 print("🔥 APP FILE LOADED SUCCESSFULLY")
 app = FastAPI()
 
+@app.get("/")
+def home():
+    return {"status": "WORKING ✅🔥"}
+
 # ---------- Models ----------
 class Email(BaseModel):
     subject: str
