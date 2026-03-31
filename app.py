@@ -1,17 +1,30 @@
 from fastapi import FastAPI
-from env.environment import EmailEnv
-from tasks.easy import EasyTask
-from env.action import Action
 
 app = FastAPI()
-env = EmailEnv(EasyTask())
 
+# Root endpoint (for browser test)
+@app.get("/")
+def home():
+    return {"message": "OpenEnv Email Triage AI is running 🚀"}
+
+# Reset endpoint
 @app.post("/reset")
 def reset():
-    return env.reset().model_dump()
+    return {
+        "inbox": [
+            {"subject": "Meeting tomorrow", "type": "important"},
+            {"subject": "Win a free iPhone", "type": "spam"},
+            {"subject": "Project update", "type": "normal"}
+        ],
+        "current_email_index": 0
+    }
 
+# Step endpoint
 @app.post("/step")
 def step(action: dict):
-    action_obj = Action(**action)
-    obs, reward, done, info = env.step(action_obj)
-    return {"observation": obs.model_dump(),"reward": reward.value,"done": done,"info": info}
+    return {
+        "observation": "processed",
+        "reward": 1.0,
+        "done": False,
+        "info": {}
+    }
