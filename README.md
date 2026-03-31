@@ -1,5 +1,5 @@
 ---
-title: OpenEnv Email Triage AI
+title: openenv-email-triage-ai
 emoji: 📧
 colorFrom: blue
 colorTo: green
@@ -8,22 +8,19 @@ app_file: app.py
 pinned: false
 ---
 
-# Email Triage OpenEnv (Final)
+# OpenEnv Email Triage AI
 
-## Real-world AI environment for email automation.
+AI-powered OpenEnv environment that simulates real-world email triage tasks including classification, response generation, and workflow automation.
 
-### Tasks
-- Easy: classification
-- Medium: reply generation
-- Hard: workflow automation
+## Features
+- Email classification (spam, important, normal)
+- Automated reply generation
+- Multi-step workflow simulation
 
-### Run
+## API Endpoints
+- POST /reset
+- POST /step
+
+## Run Locally
 docker build -t env .
 docker run -p 7860:7860 env
-
-### API
-POST /reset
-POST /step
-
-### Inference
-python inference.py
