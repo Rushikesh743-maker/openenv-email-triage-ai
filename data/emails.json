@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "sender": "hr@company.com",
+    "subject": "Interview",
+    "body": "Confirm availability",
+    "label": "important"
+  },
+  {
+    "id": 2,
+    "sender": "promo@shop.com",
+    "subject": "Discount",
+    "body": "Shop now",
+    "label": "spam"
+  },
+  {
+    "id": 3,
+    "sender": "team@company.com",
+    "subject": "Code review",
+    "body": "Please review PR",
+    "label": "normal"
+  }
+]
