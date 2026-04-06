@@ -6,48 +6,59 @@ app = FastAPI()
 
 # ---------------- AI MODELS ----------------
 
-# Classifier (safe to keep pipeline)
-classifier = pipeline("text-classification")
+# Better classifier
+classifier = pipeline(
+    "text-classification",
+    model="distilbert-base-uncased-finetuned-sst-2-english"
+)
 
-# FLAN-T5 (manual loading to avoid pipeline error)
+# FLAN-T5
 tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
 model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small")
 
 
 # ---------------- REPLY GENERATOR ----------------
 def generate_reply(text):
-    input_text = f"Write a short professional reply to this email:\n{text}"
+    prompt = f"""
+You are a professional AI email assistant.
+Write a polite, natural, and helpful reply to the email below.
+The reply should be 4-6 sentences long and feel human.
+Email:
+{text}
+Reply:
+"""
 
-    inputs = tokenizer(input_text, return_tensors="pt", truncation=True)
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
 
     outputs = model.generate(
         **inputs,
-        max_new_tokens=60
+        max_new_tokens=120,
+        do_sample=True,
+        temperature=0.7,
+        top_p=0.9,
+        repetition_penalty=1.2
     )
 
-    reply = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-    return reply
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
 # ---------------- CORE LOGIC ----------------
 def analyze_email(text):
-    # Classification
+    # classification
     result = classifier(text)[0]
     label = result['label']
     score = round(result['score'], 2)
 
-    # Map labels
-    if label == "LABEL_1":
+    if label == "POSITIVE":
         category = "Important"
     else:
         category = "Normal"
 
-    # Spam detection override
-    if "free" in text.lower() or "win" in text.lower():
+    # spam override
+    if any(word in text.lower() for word in ["free", "win", "offer", "money"]):
         category = "Spam"
 
-    # Action suggestion
+    # action
     if category == "Spam":
         action = "Delete 🚨"
     elif category == "Important":
@@ -55,7 +66,6 @@ def analyze_email(text):
     else:
         action = "Mark as Read ✔"
 
-    # Generate reply
     reply = generate_reply(text)
 
     return category, action, reply, score
@@ -70,7 +80,7 @@ def home():
         <style>
             body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
             .box { width:60%; margin:auto; margin-top:50px; }
-            textarea { width:100%; padding:10px; border-radius:10px; }
+            textarea { width:100%; padding:12px; border-radius:10px; }
             button { padding:10px 20px; border:none; border-radius:8px; background:#22c55e; color:white; cursor:pointer; }
             .card { background:#1e293b; padding:15px; border-radius:10px; margin-top:20px; }
         </style>
@@ -79,7 +89,7 @@ def home():
         <div class="box">
             <h1>🤖 AI Email Agent</h1>
             <form action="/predict" method="post">
-                <textarea name="text" rows="5" placeholder="Paste your email here..."></textarea><br><br>
+                <textarea name="text" rows="6" placeholder="Paste your email here..."></textarea><br><br>
                 <button type="submit">Analyze</button>
             </form>
         </div>
@@ -98,7 +108,7 @@ def predict(text: str = Form(...)):
         <style>
             body {{ font-family: Arial; background:#0f172a; color:white; text-align:center; }}
             .box {{ width:60%; margin:auto; margin-top:50px; }}
-            .card {{ background:#1e293b; padding:15px; border-radius:10px; margin-top:20px; }}
+            .card {{ background:#1e293b; padding:20px; border-radius:10px; margin-top:20px; }}
             button {{ padding:10px 20px; border:none; border-radius:8px; background:#22c55e; color:white; cursor:pointer; }}
         </style>
     </head>
