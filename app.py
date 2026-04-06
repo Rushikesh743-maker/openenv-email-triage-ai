@@ -133,3 +133,12 @@ def predict(text: str = Form(...)):
     </body>
     </html>
     """
+    # ---------------- OPENENV REQUIRED ROUTES ----------------
+
+@app.post("/reset")
+def reset():
+    return {"status": "ok"}
+
+@app.get("/health")
+def health():
+    return {"status": "running"}
