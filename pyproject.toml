@@ -1,7 +1,7 @@
 [project]
-name = "openenv-email-agent"
+name = "openenv-email-triage-ai"
 version = "0.1.0"
-description = "Hackathon project"
+requires-python = ">=3.10"
 
 dependencies = [
     "fastapi",
