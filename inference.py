@@ -1,38 +1,57 @@
-import os, json
-from openai import OpenAI
+import json
 from env.environment import EmailEnv
 from tasks.easy import EasyTask
 from tasks.medium import MediumTask
 from tasks.hard import HardTask
 from env.action import Action
 
-client = OpenAI(base_url=os.getenv("API_BASE_URL"), api_key=os.getenv("HF_TOKEN"))
 
-SYSTEM_PROMPT = "You are an email assistant. Return only JSON."
+# 🔹 Simple rule-based agent (no OpenAI)
+def choose_action(obs):
+    text = str(obs).lower()
 
-def run(env):
+    if any(word in text for word in ["free", "win", "offer", "money"]):
+        return Action(action_type="delete", email_id=0)
+    elif "urgent" in text or "important" in text:
+        return Action(action_type="reply", email_id=0)
+    else:
+        return Action(action_type="read", email_id=0)
+
+
+def run(task_name, env):
     obs = env.reset()
     total = 0
-    for _ in range(10):
-        prompt = str(obs)
+    steps = 0
+
+    print(f"[START] task={task_name}", flush=True)
+
+    for i in range(10):
         try:
-            res = client.chat.completions.create(
-                model=os.getenv("MODEL_NAME"),
-                messages=[{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":prompt}]
-            )
-            action = Action(**json.loads(res.choices[0].message.content))
+            action = choose_action(obs)
         except:
             action = Action(action_type="skip", email_id=0)
+
         obs, reward, done, _ = env.step(action)
+
+        steps += 1
         total += reward.value
-        if done: break
-    return total
+
+        print(f"[STEP] step={steps} reward={reward.value}", flush=True)
+
+        if done:
+            break
+
+    print(f"[END] task={task_name} score={total} steps={steps}", flush=True)
+
 
 def main():
-    results = {}
-    for name, task in [("easy",EasyTask()),("medium",MediumTask()),("hard",HardTask())]:
-        results[name] = run(EmailEnv(task))
-    print(results)
+    try:
+        run("easy", EmailEnv(EasyTask()))
+        run("medium", EmailEnv(MediumTask()))
+        run("hard", EmailEnv(HardTask()))
+    except Exception as e:
+        print(f"[ERROR] {str(e)}", flush=True)
+
 
 if __name__ == "__main__":
     main()
