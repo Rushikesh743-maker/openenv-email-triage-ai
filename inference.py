@@ -6,52 +6,64 @@ from tasks.medium import MediumTask
 from tasks.hard import HardTask
 from env.action import Action
 
-# ---------------- LLM PROXY CLIENT ----------------
+# ---------------- SAFE ENV SETUP ----------------
+
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+HF_TOKEN = os.getenv("HF_TOKEN")  # REQUIRED
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+
+if not HF_TOKEN:
+    raise Exception("❌ HF_TOKEN missing in environment variables")
+
+# ---------------- LLM CLIENT ----------------
+
 client = OpenAI(
-    base_url=os.environ["API_BASE_URL"],
-    api_key=os.environ["API_KEY"]
+    base_url=API_BASE_URL,
+    api_key=HF_TOKEN
 )
 
-# ---------------- LLM-BASED AGENT ----------------
+# ---------------- AGENT ----------------
 
 def choose_action(obs):
     prompt = f"""
 You are an AI email triage agent.
 
-You MUST choose ONE action:
-- delete
-- reply
-- read
-- skip
+You MUST choose ONLY ONE word from:
+delete, reply, read, skip
 
 Rules:
-- Spam / promotions → delete
-- Important / urgent → reply
-- Normal → read
-
-Return ONLY one word.
+- spam / promotions → delete
+- urgent / important → reply
+- normal → read
 
 Email:
 {obs}
+
+Return ONLY one word.
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a strict action selector."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.2
-    )
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "Return only one word: delete, reply, read, skip."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2,
+            max_tokens=10
+        )
 
-    action = response.choices[0].message.content.strip().lower()
+        action = response.choices[0].message.content.strip().lower()
+        action = action.replace(".", "").replace("\n", "").strip()
 
-    # safety fallback (just in case model returns weird output)
-    if action not in ["delete", "reply", "read", "skip"]:
-        action = "read"
+        if action not in ["delete", "reply", "read", "skip"]:
+            action = "read"
 
-    return Action(action_type=action, email_id=0)
+        return Action(action_type=action, email_id=0)
 
+    except Exception as e:
+        print(f"[LLM ERROR] {e}", flush=True)
+        return Action(action_type="read", email_id=0)
 
 # ---------------- RUN LOOP ----------------
 
@@ -63,11 +75,7 @@ def run(task_name, env):
     print(f"[START] task={task_name}", flush=True)
 
     for i in range(10):
-        try:
-            action = choose_action(obs)
-        except Exception as e:
-            print(f"[ERROR] {e}", flush=True)
-            action = Action(action_type="skip", email_id=0)
+        action = choose_action(obs)
 
         obs, reward, done, _ = env.step(action)
 
@@ -81,7 +89,6 @@ def run(task_name, env):
 
     print(f"[END] task={task_name} score={total} steps={steps}", flush=True)
 
-
 # ---------------- MAIN ----------------
 
 def main():
@@ -91,7 +98,6 @@ def main():
         run("hard", EmailEnv(HardTask()))
     except Exception as e:
         print(f"[ERROR] {str(e)}", flush=True)
-
 
 if __name__ == "__main__":
     main()
