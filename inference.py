@@ -1,22 +1,59 @@
-import json
+import os
+from openai import OpenAI
 from env.environment import EmailEnv
 from tasks.easy import EasyTask
 from tasks.medium import MediumTask
 from tasks.hard import HardTask
 from env.action import Action
 
+# ---------------- LLM PROXY CLIENT ----------------
+client = OpenAI(
+    base_url=os.environ["API_BASE_URL"],
+    api_key=os.environ["API_KEY"]
+)
 
-# 🔹 Simple rule-based agent (no OpenAI)
+# ---------------- LLM-BASED AGENT ----------------
+
 def choose_action(obs):
-    text = str(obs).lower()
+    prompt = f"""
+You are an AI email triage agent.
 
-    if any(word in text for word in ["free", "win", "offer", "money"]):
-        return Action(action_type="delete", email_id=0)
-    elif "urgent" in text or "important" in text:
-        return Action(action_type="reply", email_id=0)
-    else:
-        return Action(action_type="read", email_id=0)
+You MUST choose ONE action:
+- delete
+- reply
+- read
+- skip
 
+Rules:
+- Spam / promotions → delete
+- Important / urgent → reply
+- Normal → read
+
+Return ONLY one word.
+
+Email:
+{obs}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a strict action selector."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.2
+    )
+
+    action = response.choices[0].message.content.strip().lower()
+
+    # safety fallback (just in case model returns weird output)
+    if action not in ["delete", "reply", "read", "skip"]:
+        action = "read"
+
+    return Action(action_type=action, email_id=0)
+
+
+# ---------------- RUN LOOP ----------------
 
 def run(task_name, env):
     obs = env.reset()
@@ -28,7 +65,8 @@ def run(task_name, env):
     for i in range(10):
         try:
             action = choose_action(obs)
-        except:
+        except Exception as e:
+            print(f"[ERROR] {e}", flush=True)
             action = Action(action_type="skip", email_id=0)
 
         obs, reward, done, _ = env.step(action)
@@ -43,6 +81,8 @@ def run(task_name, env):
 
     print(f"[END] task={task_name} score={total} steps={steps}", flush=True)
 
+
+# ---------------- MAIN ----------------
 
 def main():
     try:
