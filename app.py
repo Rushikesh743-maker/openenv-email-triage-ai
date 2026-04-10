@@ -6,63 +6,75 @@ from openai import OpenAI
 
 app = FastAPI()
 
-# ---------------- LLM PROXY CLIENT (MANDATORY) ----------------
+# ---------------- SAFE ENV CONFIG ----------------
+
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+
+if not HF_TOKEN:
+    raise Exception("❌ Missing HF_TOKEN / API_KEY in environment variables")
+
+# ---------------- HF CLIENT ----------------
+
 client = OpenAI(
-    base_url=os.environ["API_BASE_URL"],
-    api_key=os.environ["API_KEY"]
+    base_url=API_BASE_URL,
+    api_key=HF_TOKEN
 )
 
-# ---------------- CORE LLM LOGIC ----------------
+# ---------------- CORE LOGIC ----------------
 
 def analyze_email(text: str):
     prompt = f"""
-You are an AI email triage system.
+You are an AI email assistant.
 
-Classify the email into:
-- Spam
-- Important
-- Normal
+Return ONLY valid JSON (no markdown, no explanation).
 
-Decide action:
-- Spam → Delete 🚨
-- Important → Reply 📩
-- Normal → Mark as Read ✔
-
-Also write a short professional reply.
-
-Return ONLY valid JSON:
+Schema:
 {{
-  "category": "...",
-  "action": "...",
-  "reply": "...",
+  "category": "Spam | Important | Normal",
+  "action": "Delete | Reply | Mark as Read",
+  "reply": "short professional reply",
   "confidence": 0.0
 }}
+
+Rules:
+- Spam emails → Spam + Delete
+- Urgent emails → Important + Reply
+- Others → Normal + Mark as Read
 
 Email:
 {text}
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a strict JSON generator."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.3
-    )
-
-    result = response.choices[0].message.content
-
     try:
-        return json.loads(result)
-    except:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "You are a strict JSON generator."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2,
+            max_tokens=250
+        )
+
+        result = response.choices[0].message.content.strip()
+
+        # ---------------- SAFE JSON PARSING ----------------
+        try:
+            return json.loads(result)
+        except:
+            cleaned = result.replace("```json", "").replace("```", "").strip()
+            return json.loads(cleaned)
+
+    except Exception as e:
+        print(f"[LLM ERROR] {e}", flush=True)
         return {
             "category": "Normal",
             "action": "Mark as Read",
-            "reply": result,
-            "confidence": 0.5
+            "reply": "Unable to generate response at the moment.",
+            "confidence": 0.0
         }
-
 
 # ---------------- UI ----------------
 
@@ -90,7 +102,6 @@ def home():
     </body>
     </html>
     """
-
 
 # ---------------- PREDICT ----------------
 
@@ -123,13 +134,11 @@ def predict(text: str = Form(...)):
     </html>
     """
 
-
-# ---------------- REQUIRED ENDPOINTS (OPENENV / HACKATHON) ----------------
+# ---------------- HACKATHON REQUIRED ROUTES ----------------
 
 @app.post("/reset")
 def reset():
     return {"status": "reset done"}
-
 
 @app.get("/health")
 def health():
