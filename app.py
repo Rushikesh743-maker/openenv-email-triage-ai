@@ -1,77 +1,71 @@
+import os
+import json
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from openai import OpenAI
 
 app = FastAPI()
 
-# ---------------- AI MODELS ----------------
-
-# Better classifier
-classifier = pipeline(
-    "text-classification",
-    model="distilbert-base-uncased-finetuned-sst-2-english"
+# ---------------- LLM PROXY CLIENT (MANDATORY) ----------------
+client = OpenAI(
+    base_url=os.environ["API_BASE_URL"],
+    api_key=os.environ["API_KEY"]
 )
 
-# FLAN-T5
-tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
-model = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small")
+# ---------------- CORE LLM LOGIC ----------------
 
-
-# ---------------- REPLY GENERATOR ----------------
-def generate_reply(text):
+def analyze_email(text: str):
     prompt = f"""
-You are a professional AI email assistant.
-Write a polite, natural, and helpful reply to the email below.
-The reply should be 4-6 sentences long and feel human.
+You are an AI email triage system.
+
+Classify the email into:
+- Spam
+- Important
+- Normal
+
+Decide action:
+- Spam → Delete 🚨
+- Important → Reply 📩
+- Normal → Mark as Read ✔
+
+Also write a short professional reply.
+
+Return ONLY valid JSON:
+{{
+  "category": "...",
+  "action": "...",
+  "reply": "...",
+  "confidence": 0.0
+}}
+
 Email:
 {text}
-Reply:
 """
 
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
-
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=120,
-        do_sample=True,
-        temperature=0.7,
-        top_p=0.9,
-        repetition_penalty=1.2
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a strict JSON generator."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3
     )
 
-    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+    result = response.choices[0].message.content
 
-
-# ---------------- CORE LOGIC ----------------
-def analyze_email(text):
-    # classification
-    result = classifier(text)[0]
-    label = result['label']
-    score = round(result['score'], 2)
-
-    if label == "POSITIVE":
-        category = "Important"
-    else:
-        category = "Normal"
-
-    # spam override
-    if any(word in text.lower() for word in ["free", "win", "offer", "money"]):
-        category = "Spam"
-
-    # action
-    if category == "Spam":
-        action = "Delete 🚨"
-    elif category == "Important":
-        action = "Reply 📩"
-    else:
-        action = "Mark as Read ✔"
-
-    reply = generate_reply(text)
-
-    return category, action, reply, score
+    try:
+        return json.loads(result)
+    except:
+        return {
+            "category": "Normal",
+            "action": "Mark as Read",
+            "reply": result,
+            "confidence": 0.5
+        }
 
 
 # ---------------- UI ----------------
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     return """
@@ -87,7 +81,7 @@ def home():
     </head>
     <body>
         <div class="box">
-            <h1>🤖 AI Email Agent</h1>
+            <h1>🤖 AI Email Agent (LLM Powered)</h1>
             <form action="/predict" method="post">
                 <textarea name="text" rows="6" placeholder="Paste your email here..."></textarea><br><br>
                 <button type="submit">Analyze</button>
@@ -98,46 +92,44 @@ def home():
     """
 
 
+# ---------------- PREDICT ----------------
+
 @app.post("/predict", response_class=HTMLResponse)
 def predict(text: str = Form(...)):
-    category, action, reply, score = analyze_email(text)
+    result = analyze_email(text)
 
     return f"""
     <html>
-    <head>
-        <style>
-            body {{ font-family: Arial; background:#0f172a; color:white; text-align:center; }}
-            .box {{ width:60%; margin:auto; margin-top:50px; }}
-            .card {{ background:#1e293b; padding:20px; border-radius:10px; margin-top:20px; }}
-            button {{ padding:10px 20px; border:none; border-radius:8px; background:#22c55e; color:white; cursor:pointer; }}
-        </style>
-    </head>
-    <body>
-        <div class="box">
-            <h1>🤖 AI Email Agent</h1>
-            <div class="card">
-                <h2>📊 Category: {category}</h2>
-                <p>Confidence: {score}</p>
-            </div>
-            <div class="card">
-                <h3>⚡ Suggested Action</h3>
-                <p>{action}</p>
-            </div>
-            <div class="card">
-                <h3>✍️ AI Reply</h3>
-                <p>{reply}</p>
-            </div>
-            <br>
-            <a href="/"><button>🔙 Try Another</button></a>
+    <body style="font-family:Arial;background:#0f172a;color:white;text-align:center;">
+        <h1>📧 AI Email Result</h1>
+
+        <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
+            <h2>📊 Category: {result.get('category')}</h2>
+            <p>Confidence: {result.get('confidence')}</p>
         </div>
+
+        <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
+            <h3>⚡ Action</h3>
+            <p>{result.get('action')}</p>
+        </div>
+
+        <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
+            <h3>✍️ Reply</h3>
+            <p>{result.get('reply')}</p>
+        </div>
+
+        <a href="/"><button style="padding:10px 20px;">🔙 Back</button></a>
     </body>
     </html>
     """
-    # ---------------- OPENENV REQUIRED ROUTES ----------------
+
+
+# ---------------- REQUIRED ENDPOINTS (OPENENV / HACKATHON) ----------------
 
 @app.post("/reset")
 def reset():
-    return {"status": "ok"}
+    return {"status": "reset done"}
+
 
 @app.get("/health")
 def health():
