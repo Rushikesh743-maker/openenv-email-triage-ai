@@ -1,6 +1,4 @@
 fastapi
 uvicorn
-transformers
-torch
-scikit-learn
+openai
 python-multipart
