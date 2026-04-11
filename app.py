@@ -22,8 +22,11 @@ if API_BASE_URL and API_KEY:
         print("[CLIENT READY]", flush=True)
     except Exception as e:
         print("[CLIENT INIT ERROR]", e, flush=True)
+        client = None
 else:
     print("[WARNING] API env vars not found (local run)", flush=True)
+
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 
 # ---------------- FORCE API CALL ----------------
 
