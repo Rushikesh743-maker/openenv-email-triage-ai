@@ -122,17 +122,64 @@ Email:
     }
 
 # ---------------- UI ----------------
-
 @app.get("/", response_class=HTMLResponse)
 def home():
     return """
     <html>
-    <body style="font-family:Arial;background:#0f172a;color:white;text-align:center;">
-        <h1>🤖 AI Email Agent</h1>
-        <form action="/predict" method="post">
-            <textarea name="text" rows="6" style="width:60%;padding:10px;"></textarea><br><br>
-            <button type="submit">Analyze</button>
-        </form>
+    <head>
+        <style>
+            body {
+                font-family: 'Segoe UI', sans-serif;
+                background: linear-gradient(135deg, #0f172a, #1e293b);
+                color: white;
+                text-align: center;
+            }
+            .container {
+                width: 60%;
+                margin: auto;
+                margin-top: 60px;
+                padding: 30px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 15px;
+                box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            }
+            textarea {
+                width: 100%;
+                padding: 15px;
+                border-radius: 10px;
+                border: none;
+                margin-top: 20px;
+                font-size: 16px;
+            }
+            button {
+                margin-top: 20px;
+                padding: 12px 25px;
+                border: none;
+                border-radius: 10px;
+                background: #22c55e;
+                color: white;
+                font-size: 16px;
+                cursor: pointer;
+                transition: 0.3s;
+            }
+            button:hover {
+                background: #16a34a;
+            }
+            h1 {
+                font-size: 32px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🤖 AI Email Assistant</h1>
+            <p>Paste your email and let AI decide the best action</p>
+            <form action="/predict" method="post">
+                <textarea name="text" rows="6" placeholder="Paste your email here..."></textarea>
+                <br>
+                <button type="submit">Analyze Email</button>
+            </form>
+        </div>
     </body>
     </html>
     """
@@ -154,13 +201,61 @@ def predict(text: str = Form(...)):
 
     return f"""
     <html>
-    <body style="font-family:Arial;background:#0f172a;color:white;text-align:center;">
-        <h1>📧 AI Email Result</h1>
-        <p><b>Category:</b> {result.get('category')}</p>
-        <p><b>Action:</b> {result.get('action')}</p>
-        <p><b>Reply:</b> {result.get('reply')}</p>
-        <p><b>Confidence:</b> {result.get('confidence')}</p>
-        <br><a href="/">Back</a>
+    <head>
+        <style>
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background: linear-gradient(135deg, #0f172a, #1e293b);
+                color: white;
+                text-align: center;
+            }}
+            .container {{
+                width: 60%;
+                margin: auto;
+                margin-top: 50px;
+            }}
+            .card {{
+                background: rgba(255,255,255,0.05);
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 12px;
+                box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            }}
+            .title {{
+                font-size: 28px;
+                margin-bottom: 20px;
+            }}
+            .btn {{
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                background: #3b82f6;
+                color: white;
+                cursor: pointer;
+            }}
+            .btn:hover {{
+                background: #2563eb;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="title">📧 Email Analysis Result</h1>
+            <div class="card">
+                <h2>📊 Category</h2>
+                <p>{result.get('category')}</p>
+                <p>Confidence: {result.get('confidence')}</p>
+            </div>
+            <div class="card">
+                <h2>⚡ Suggested Action</h2>
+                <p>{result.get('action')}</p>
+            </div>
+            <div class="card">
+                <h2>✍️ Suggested Reply</h2>
+                <p>{result.get('reply')}</p>
+            </div>
+            <a href="/"><button class="btn">🔙 Back</button></a>
+        </div>
     </body>
     </html>
     """
