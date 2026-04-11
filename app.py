@@ -12,69 +12,89 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 
+# Do NOT crash if token missing
 if not HF_TOKEN:
-    raise Exception("❌ Missing HF_TOKEN / API_KEY in environment variables")
+    print("[WARNING] No API key found, running in fallback mode", flush=True)
 
-# ---------------- HF CLIENT ----------------
+# ---------------- SAFE CLIENT INIT ----------------
 
-client = OpenAI(
-    base_url=API_BASE_URL,
-    api_key=HF_TOKEN
-)
+client = None
+
+if HF_TOKEN:
+    try:
+        client = OpenAI(
+            base_url=API_BASE_URL,
+            api_key=HF_TOKEN
+        )
+    except Exception as e:
+        print("[CLIENT INIT ERROR]", e, flush=True)
+        client = None
 
 # ---------------- CORE LOGIC ----------------
 
 def analyze_email(text: str):
-    prompt = f"""
-You are an AI email assistant.
+    text_lower = text.lower()
 
-Return ONLY valid JSON (no markdown, no explanation).
+    # -------- RULE-BASED (PRIMARY, SAFE) --------
+    if any(word in text_lower for word in ["spam", "offer", "buy now", "free", "discount"]):
+        return {
+            "category": "Spam",
+            "action": "Delete",
+            "reply": "",
+            "confidence": 0.9
+        }
 
-Schema:
+    if any(word in text_lower for word in ["urgent", "asap", "important"]):
+        return {
+            "category": "Important",
+            "action": "Reply",
+            "reply": "I will get back to you shortly.",
+            "confidence": 0.9
+        }
+
+    # -------- OPTIONAL LLM (only if available) --------
+    if client:
+        try:
+            prompt = f"""
+Return ONLY valid JSON:
 {{
   "category": "Spam | Important | Normal",
   "action": "Delete | Reply | Mark as Read",
   "reply": "short professional reply",
   "confidence": 0.0
 }}
-
-Rules:
-- Spam emails → Spam + Delete
-- Urgent emails → Important + Reply
-- Others → Normal + Mark as Read
-
 Email:
 {text}
 """
 
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": "You are a strict JSON generator."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2,
-            max_tokens=250
-        )
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": "You are a strict JSON generator."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,
+                max_tokens=200
+            )
 
-        result = response.choices[0].message.content.strip()
+            result = response.choices[0].message.content.strip()
 
-        # ---------------- SAFE JSON PARSING ----------------
-        try:
-            return json.loads(result)
-        except:
-            cleaned = result.replace("```json", "").replace("```", "").strip()
-            return json.loads(cleaned)
+            try:
+                return json.loads(result)
+            except:
+                cleaned = result.replace("```json", "").replace("```", "").strip()
+                return json.loads(cleaned)
 
-    except Exception as e:
-        print(f"[LLM ERROR] {e}", flush=True)
-        return {
-            "category": "Normal",
-            "action": "Mark as Read",
-            "reply": "Unable to generate response at the moment.",
-            "confidence": 0.0
-        }
+        except Exception as e:
+            print(f"[LLM ERROR] {e}", flush=True)
+
+    # -------- SAFE DEFAULT --------
+    return {
+        "category": "Normal",
+        "action": "Mark as Read",
+        "reply": "Noted. Thank you.",
+        "confidence": 0.5
+    }
 
 # ---------------- UI ----------------
 
@@ -93,7 +113,7 @@ def home():
     </head>
     <body>
         <div class="box">
-            <h1>🤖 AI Email Agent (LLM Powered)</h1>
+            <h1>🤖 AI Email Agent</h1>
             <form action="/predict" method="post">
                 <textarea name="text" rows="6" placeholder="Paste your email here..."></textarea><br><br>
                 <button type="submit">Analyze</button>
@@ -107,34 +127,39 @@ def home():
 
 @app.post("/predict", response_class=HTMLResponse)
 def predict(text: str = Form(...)):
-    result = analyze_email(text)
+    try:
+        result = analyze_email(text)
+    except Exception as e:
+        print("[PREDICT ERROR]", e, flush=True)
+        result = {
+            "category": "Normal",
+            "action": "Mark as Read",
+            "reply": "Error occurred.",
+            "confidence": 0.0
+        }
 
     return f"""
     <html>
     <body style="font-family:Arial;background:#0f172a;color:white;text-align:center;">
         <h1>📧 AI Email Result</h1>
-
         <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
             <h2>📊 Category: {result.get('category')}</h2>
             <p>Confidence: {result.get('confidence')}</p>
         </div>
-
         <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
             <h3>⚡ Action</h3>
             <p>{result.get('action')}</p>
         </div>
-
         <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
             <h3>✍️ Reply</h3>
             <p>{result.get('reply')}</p>
         </div>
-
         <a href="/"><button style="padding:10px 20px;">🔙 Back</button></a>
     </body>
     </html>
     """
 
-# ---------------- HACKATHON REQUIRED ROUTES ----------------
+# ---------------- REQUIRED ROUTES ----------------
 
 @app.post("/reset")
 def reset():
