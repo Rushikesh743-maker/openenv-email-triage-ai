@@ -10,21 +10,16 @@ app = FastAPI()
 
 client = None
 
-API_BASE_URL = os.getenv("API_BASE_URL")
-API_KEY = os.getenv("API_KEY")
+try:
+    client = OpenAI(
+        base_url=os.environ["API_BASE_URL"],   # MUST BE THIS
+        api_key=os.environ["API_KEY"]          # MUST BE THIS
+    )
+    print("[CLIENT READY WITH VALIDATOR ENV]", flush=True)
 
-if API_BASE_URL and API_KEY:
-    try:
-        client = OpenAI(
-            base_url=API_BASE_URL,
-            api_key=API_KEY
-        )
-        print("[CLIENT READY]", flush=True)
-    except Exception as e:
-        print("[CLIENT INIT ERROR]", e, flush=True)
-        client = None
-else:
-    print("[WARNING] API env vars not found (local run)", flush=True)
+except Exception as e:
+    print("[CLIENT INIT FAILED]", e, flush=True)
+    client = None
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 
