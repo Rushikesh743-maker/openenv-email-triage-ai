@@ -87,8 +87,15 @@ def run(task_name, env):
             print(f"[STEP ERROR {task_name}]", e, flush=True)
             break
 
-    print(f"[END] {task_name} score={total}", flush=True)
+    # 🔥 FIX: normalize + clamp score
+    score = total / max(steps, 1)
 
+    if score <= 0:
+        score = 0.01
+    elif score >= 1:
+        score = 0.99
+
+    print(f"[END] {task_name} score={score}", flush=True)
 
 # -------- MAIN --------
 def main():
