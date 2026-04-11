@@ -6,25 +6,50 @@ from openai import OpenAI
 
 app = FastAPI()
 
-# ---------------- SAFE ENV CONFIG ----------------
+# ---------------- ENV CONFIG ----------------
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
+API_BASE_URL = os.getenv("API_BASE_URL")
+API_KEY = os.getenv("API_KEY")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 
-# Do NOT crash if token missing
-if not HF_TOKEN:
-    print("[WARNING] No API key found, running in fallback mode", flush=True)
+# ---------------- SAFE LLM PING (REQUIRED) ----------------
 
-# ---------------- SAFE CLIENT INIT ----------------
+def ping_llm():
+    try:
+        if not API_BASE_URL or not API_KEY:
+            print("[PING SKIPPED] Missing API_BASE_URL or API_KEY", flush=True)
+            return
+
+        client = OpenAI(
+            base_url=API_BASE_URL,
+            api_key=API_KEY
+        )
+
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=5
+        )
+
+        print("[LLM PING SUCCESS]", flush=True)
+
+    except Exception as e:
+        print("[LLM PING FAILED]", e, flush=True)
+
+# Run at startup
+@app.on_event("startup")
+def startup_event():
+    ping_llm()
+
+# ---------------- SAFE CLIENT (OPTIONAL USE) ----------------
 
 client = None
 
-if HF_TOKEN:
+if API_BASE_URL and API_KEY:
     try:
         client = OpenAI(
             base_url=API_BASE_URL,
-            api_key=HF_TOKEN
+            api_key=API_KEY
         )
     except Exception as e:
         print("[CLIENT INIT ERROR]", e, flush=True)
@@ -35,7 +60,7 @@ if HF_TOKEN:
 def analyze_email(text: str):
     text_lower = text.lower()
 
-    # -------- RULE-BASED (PRIMARY, SAFE) --------
+    # -------- RULE-BASED (PRIMARY SAFE) --------
     if any(word in text_lower for word in ["spam", "offer", "buy now", "free", "discount"]):
         return {
             "category": "Spam",
@@ -52,7 +77,7 @@ def analyze_email(text: str):
             "confidence": 0.9
         }
 
-    # -------- OPTIONAL LLM (only if available) --------
+    # -------- OPTIONAL LLM --------
     if client:
         try:
             prompt = f"""
@@ -102,23 +127,12 @@ Email:
 def home():
     return """
     <html>
-    <head>
-        <style>
-            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            .box { width:60%; margin:auto; margin-top:50px; }
-            textarea { width:100%; padding:12px; border-radius:10px; }
-            button { padding:10px 20px; border:none; border-radius:8px; background:#22c55e; color:white; cursor:pointer; }
-            .card { background:#1e293b; padding:15px; border-radius:10px; margin-top:20px; }
-        </style>
-    </head>
-    <body>
-        <div class="box">
-            <h1>🤖 AI Email Agent</h1>
-            <form action="/predict" method="post">
-                <textarea name="text" rows="6" placeholder="Paste your email here..."></textarea><br><br>
-                <button type="submit">Analyze</button>
-            </form>
-        </div>
+    <body style="font-family:Arial;background:#0f172a;color:white;text-align:center;">
+        <h1>🤖 AI Email Agent</h1>
+        <form action="/predict" method="post">
+            <textarea name="text" rows="6" style="width:60%;padding:10px;"></textarea><br><br>
+            <button type="submit">Analyze</button>
+        </form>
     </body>
     </html>
     """
@@ -142,19 +156,11 @@ def predict(text: str = Form(...)):
     <html>
     <body style="font-family:Arial;background:#0f172a;color:white;text-align:center;">
         <h1>📧 AI Email Result</h1>
-        <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
-            <h2>📊 Category: {result.get('category')}</h2>
-            <p>Confidence: {result.get('confidence')}</p>
-        </div>
-        <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
-            <h3>⚡ Action</h3>
-            <p>{result.get('action')}</p>
-        </div>
-        <div style="background:#1e293b;padding:20px;margin:20px;border-radius:10px;">
-            <h3>✍️ Reply</h3>
-            <p>{result.get('reply')}</p>
-        </div>
-        <a href="/"><button style="padding:10px 20px;">🔙 Back</button></a>
+        <p><b>Category:</b> {result.get('category')}</p>
+        <p><b>Action:</b> {result.get('action')}</p>
+        <p><b>Reply:</b> {result.get('reply')}</p>
+        <p><b>Confidence:</b> {result.get('confidence')}</p>
+        <br><a href="/">Back</a>
     </body>
     </html>
     """
