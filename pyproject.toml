@@ -2,7 +2,13 @@
 name = "openenv-email-triage-ai"
 version = "0.1.0"
 requires-python = ">=3.10"
-
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "openenv-core>=0.2.0",
+    "openai",
+    "pydantic"
+]
 
 [project.scripts]
 server = "server.app:main"
