@@ -1,14 +1,4 @@
-import os
-import json
-from fastapi import FastAPI, Form
-from fastapi.responses import HTMLResponse
-from openai import OpenAI
 
-app = FastAPI()
-
-# ---------------- ENV CONFIG ----------------
-
-client = None
 
 try:
     client = OpenAI(
