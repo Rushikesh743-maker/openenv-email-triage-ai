@@ -1,7 +1,13 @@
 import json
 
 class EasyTask:
+def __init__(self):
+        self.index = 0
+        self.done = False
+        with open("data/emails.json") as f:
+            self.emails = json.load(f)
 
+    def reset(self):
     
         self.index = 0
         self.done = False
